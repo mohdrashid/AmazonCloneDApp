@@ -4,6 +4,7 @@ pragma solidity ^0.4.0;
 contract ShopFront {
 
     address public owner;
+
     struct ProductStruct{
     uint id;
     uint price;
@@ -78,14 +79,14 @@ contract ShopFront {
         }
     }
 
-    function removeProduct(uint _index) returns(bool){
-        uint listIndex=idPool[_index];
-        ProductStruct memory product=productList[listIndex-1];
+    function removeProduct(uint _productID) returns(bool){
+        uint listIndex=idPool[_productID];
+        ProductStruct memory product = productList[listIndex-1];
         if(product.owner!=msg.sender){
             revert();
         }
         else{
-            delete productList[listIndex];
+            delete productList[listIndex-1];
             return true;
         }
     }
