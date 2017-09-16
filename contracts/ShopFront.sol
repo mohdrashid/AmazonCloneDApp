@@ -5,9 +5,38 @@ contract Owned{
     function Owned(){
         owner=msg.sender;
     }
+
+    modifier onlyOwner(){
+        require(owner==msg.sender);
+        _;
+    }
 }
 
-contract ShopFront is Owned {
+
+contract Administrated is Owned{
+    mapping(address=>bool) public admins;
+
+    event LogAddAdmin(address admin);
+    event LogRemoveAdmin(address admin);
+
+    function Administrated(){
+
+    }
+
+    function addAdmin(address admin) public onlyOwner returns (bool){
+        admins[admin]=true;
+        LogAddAdmin(admin);
+        return true;
+    }
+
+    function removeAdmin(address admin) public onlyOwner returns (bool){
+        admins[admin]=false;
+        LogRemoveAdmin(admin);
+        return true;
+    }
+}
+
+contract ShopFront is Administrated {
 
     struct ProductStruct{
     uint id;
@@ -35,7 +64,6 @@ contract ShopFront is Owned {
         if(productList.length!=0&&idPool[_id]!=0){
             revert();
         }
-        //need to check if name is null
         else if(_price!=0){
             productList.push(ProductStruct(_id,_price,_stock,msg.sender));
             idPool[_id]=productList.length;
@@ -89,7 +117,7 @@ contract ShopFront is Owned {
     function removeProduct(uint _productID) returns(bool){
         uint listIndex=idPool[_productID];
         ProductStruct memory product = productList[listIndex-1];
-        if(owner!=msg.sender&&product.owner!=msg.sender){
+        if(owner!=msg.sender&&admins[msg.sender]!=true&&product.owner!=msg.sender){
             revert();
         }
         else{
@@ -102,6 +130,7 @@ contract ShopFront is Owned {
     function reStock(uint _index,uint stock) returns(bool){
         uint listIndex=idPool[_index];
         ProductStruct memory product=productList[listIndex-1];
+        require(product.price>0);
         product.stock=stock;
         productList[listIndex]=product;
         LogRestock(_index,stock);
