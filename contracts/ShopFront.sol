@@ -1,40 +1,45 @@
-pragma solidity ^0.4.0;
+pragma solidity ^0.4.6;
 
-
-contract ShopFront {
-
+contract Owned{
     address public owner;
+    function Owned(){
+        owner=msg.sender;
+    }
+}
+
+contract ShopFront is Owned {
 
     struct ProductStruct{
     uint id;
     uint price;
-    string name;
-    uint stockAmount;
+    uint stock;
     address owner;
     }
 
-    mapping(address=>uint) balanceSheet;
+    mapping(address=>uint) private balanceSheet;
 
     mapping (uint=>uint) idPool;
     ProductStruct[] public productList;
 
-    modifier requireOwner(){
-        require(msg.sender==owner);
-        _;
-    }
+    //events
+    event LogAddProduct(address merchant,uint productID,uint price,uint stock);
+    event LogBuyProduct(address customer,uint productID);
+    event LogRemoveProduct(uint productID);
+    event LogRestock(uint productID,uint stock);
+    event LogWithdraw(address withdrawer);
 
     function ShopFront(){
-        owner=msg.sender;
     }
 
-    function addProduct(uint _id,uint _price,string _name,uint _stockAmount) returns(bool){
+    function addProduct(uint _id,uint _price,uint _stock) returns(bool){
         if(productList.length!=0&&idPool[_id]!=0){
             revert();
         }
         //need to check if name is null
         else if(_price!=0){
-            productList.push(ProductStruct(_id,_price,_name,_stockAmount,msg.sender));
+            productList.push(ProductStruct(_id,_price,_stock,msg.sender));
             idPool[_id]=productList.length;
+            LogAddProduct(msg.sender,_id,_price,_stock);
             return true;
         }
         else{
@@ -48,7 +53,7 @@ contract ShopFront {
         if(product.price==0||msg.value<product.price){
             revert();
         }
-        else if(product.stockAmount==0||product.stockAmount<_quantity){
+        else if(product.stock==0||product.stock<_quantity){
             revert();
         }
         else{
@@ -56,7 +61,8 @@ contract ShopFront {
             if(productOwnerBalance+(product.price*_quantity)<productOwnerBalance){
                 revert();
             }
-            productList[listIndex-1].stockAmount-=_quantity;
+            productList[listIndex-1].stock-=_quantity;
+            LogBuyProduct(msg.sender,_productID);
             balanceSheet[product.owner]+=(product.price*_quantity);
         }
         return true;
@@ -73,6 +79,7 @@ contract ShopFront {
         else{
             if(msg.sender.send(balanceSheet[msg.sender])){
                 balanceSheet[msg.sender]=0;
+                LogWithdraw(msg.sender);
                 return true;
             }
             return false;
@@ -82,29 +89,26 @@ contract ShopFront {
     function removeProduct(uint _productID) returns(bool){
         uint listIndex=idPool[_productID];
         ProductStruct memory product = productList[listIndex-1];
-        if(product.owner!=msg.sender){
+        if(owner!=msg.sender&&product.owner!=msg.sender){
             revert();
         }
         else{
             delete productList[listIndex-1];
+            LogRemoveProduct(_productID);
             return true;
         }
     }
 
-    function reStock(uint _index,uint stockAmount) returns(bool){
+    function reStock(uint _index,uint stock) returns(bool){
         uint listIndex=idPool[_index];
         ProductStruct memory product=productList[listIndex-1];
-        product.stockAmount=stockAmount;
+        product.stock=stock;
         productList[listIndex]=product;
+        LogRestock(_index,stock);
         return true;
     }
 
     function getProductsCount() returns(uint){
         return productList.length;
-    }
-
-    function kill() requireOwner() public returns(bool success){
-        selfdestruct(owner);
-        success=true;
     }
 }
