@@ -105,12 +105,17 @@ contract ShopFront is Administrated {
             revert();
         }
         else{
-            if(msg.sender.send(balanceSheet[msg.sender])){
-                balanceSheet[msg.sender]=0;
+            uint amountToSend=balanceSheet[msg.sender];
+            if(amountToSend==0) revert();
+            balanceSheet[msg.sender]=0;
+            if(msg.sender.send(amountToSend)){
                 LogWithdraw(msg.sender);
                 return true;
             }
-            return false;
+            else{
+                balanceSheet[msg.sender]=amountToSend;
+                revert();
+            }
         }
     }
 
