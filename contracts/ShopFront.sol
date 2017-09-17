@@ -42,13 +42,13 @@ contract ShopFront is Administrated {
     uint id;
     uint price;
     uint stock;
+    bool isPresent;
     address owner;
     }
 
     mapping(address=>uint) private balanceSheet;
 
-    mapping (uint=>uint) idPool;
-    ProductStruct[] public productList;
+    mapping (uint=>ProductStruct) productList;
 
     //events
     event LogAddProduct(address merchant,uint productID,uint price,uint stock);
@@ -61,38 +61,28 @@ contract ShopFront is Administrated {
     }
 
     function addProduct(uint _id,uint _price,uint _stock) returns(bool){
-        if(productList.length!=0&&idPool[_id]!=0){
-            revert();
-        }
-        else if(_price!=0){
-            productList.push(ProductStruct(_id,_price,_stock,msg.sender));
-            idPool[_id]=productList.length;
-            LogAddProduct(msg.sender,_id,_price,_stock);
-            return true;
-        }
-        else{
-            return false;
-        }
+        require(productList[_id].isPresent==false);
+        require(_price!=0);
+        productList[_id]=ProductStruct(_id,_price,_stock,true,msg.sender);
+        LogAddProduct(msg.sender,_id,_price,_stock);
+        return true;
+
     }
 
     function buyProduct(uint _productID, uint _quantity) payable returns(bool){
-        uint listIndex=idPool[_productID];
-        ProductStruct memory product = productList[listIndex-1];
-        if(product.price==0||msg.value<product.price){
+        ProductStruct memory product = productList[_productID];
+        require(product.isPresent==true);
+        require(product.price!=0||msg.value>=product.price);
+        require(product.stock!=0||product.stock>=_quantity);
+
+        uint productOwnerBalance=product.owner.balance;
+        if(productOwnerBalance+(product.price*_quantity)<productOwnerBalance){
             revert();
         }
-        else if(product.stock==0||product.stock<_quantity){
-            revert();
-        }
-        else{
-            uint productOwnerBalance=product.owner.balance;
-            if(productOwnerBalance+(product.price*_quantity)<productOwnerBalance){
-                revert();
-            }
-            productList[listIndex-1].stock-=_quantity;
-            LogBuyProduct(msg.sender,_productID);
-            balanceSheet[product.owner]+=(product.price*_quantity);
-        }
+        productList[_productID].stock-=_quantity;
+        LogBuyProduct(msg.sender,_productID);
+        balanceSheet[product.owner]+=(product.price*_quantity);
+
         return true;
     }
 
@@ -120,29 +110,28 @@ contract ShopFront is Administrated {
     }
 
     function removeProduct(uint _productID) returns(bool){
-        uint listIndex=idPool[_productID];
-        ProductStruct memory product = productList[listIndex-1];
-        if(owner!=msg.sender&&admins[msg.sender]!=true&&product.owner!=msg.sender){
-            revert();
-        }
-        else{
-            delete productList[listIndex-1];
-            LogRemoveProduct(_productID);
-            return true;
-        }
+        ProductStruct memory product = productList[_productID];
+        require(product.isPresent==true);
+        require(owner==msg.sender||admins[msg.sender]==true||product.owner==msg.sender);
+
+        productList[_productID].isPresent=false;
+        LogRemoveProduct(_productID);
+        return true;
+
     }
 
     function reStock(uint _index,uint stock) returns(bool){
-        uint listIndex=idPool[_index];
-        ProductStruct memory product=productList[listIndex-1];
+        ProductStruct memory product=productList[_index];
         require(product.price>0);
         product.stock=stock;
-        productList[listIndex]=product;
+        productList[_index]=product;
         LogRestock(_index,stock);
         return true;
     }
 
-    function getProductsCount() returns(uint){
-        return productList.length;
+    function getProduct(uint _index) constant public returns(uint id,uint price,uint stock){
+        ProductStruct memory product=productList[_index];
+        require(product.isPresent);
+        return (product.id,product.price,product.stock);
     }
 }
